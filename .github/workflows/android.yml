@@ -1,0 +1,38 @@
+name: Android CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Android SDK 36 installieren
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Wrapper ausführbar machen
+        run: chmod +x gradlew
+
+      - name: Firebase-Konfiguration für Buildtest anlegen
+        run: cp app/google-services.json.example app/google-services.json
+
+      - name: Tests und Lint
+        run: ./gradlew testDebugUnitTest lintDebug --stacktrace

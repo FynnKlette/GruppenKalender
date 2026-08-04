@@ -1,0 +1,23 @@
+{
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "DEIN_FIREBASE_PROJEKT",
+    "storage_bucket": "DEIN_FIREBASE_PROJEKT.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:DEINE_APP_ID",
+        "android_client_info": {
+          "package_name": "de.gruppenkalender.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "DEIN_WEB_API_KEY"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}
