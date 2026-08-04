@@ -255,7 +255,7 @@ fun EventEditorScreen(
                     onValueChange = { location = it },
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Outlined.LocationOn, null) },
-                    placeholder = { Text("Sporthalle Mitte") },
+                    placeholder = { Text("Ort") },
                     singleLine = true,
                 )
             }

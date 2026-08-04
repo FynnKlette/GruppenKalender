@@ -317,11 +317,7 @@ private fun JoinGroupDialog(onDismiss: () -> Unit) {
                     label = { Text("Einladungscode") },
                     singleLine = true,
                 )
-                Text(
-                    "Der Server-Abgleich ist im MVP als Erweiterungspunkt vorbereitet.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                )
+
             }
         },
         confirmButton = {

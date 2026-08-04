@@ -56,7 +56,7 @@ import de.gruppenkalender.app.ui.components.KinshipCard
 import de.gruppenkalender.app.ui.components.ScreenPadding
 import de.gruppenkalender.app.ui.theme.KinshipBlue
 import de.gruppenkalender.app.ui.theme.KinshipRed
-#Settings&Profile-Screen
+//Settings&Profile-Screen
 @Composable
 fun SettingsScreen(
     profile: UserProfile,
@@ -316,7 +316,7 @@ fun SettingsScreen(
             title = { Text("E-Mail vorbereitet") },
             text = {
                 Text(
-                    "Firebase hat einen echten Link zum Zurücksetzen des Passworts versendet.",
+                    "Link zum Zurücksetzen des Passworts versendet.",
                 )
             },
             confirmButton = {
