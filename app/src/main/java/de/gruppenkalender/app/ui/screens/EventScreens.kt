@@ -442,7 +442,12 @@ fun EventDetailsScreen(
                         )
                         Text(
                             "${event.startDate.format(GermanDateFormatter)} | " +
-                                "${event.startTime.format(TimeFormatter)} – " +
+                                "${event.startTime.format(TimeFormatter)} Uhr",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "${event.endDate.format(GermanDateFormatter)} | " +
                                 "${event.endTime.format(TimeFormatter)} Uhr",
                             color = Color.White,
                             style = MaterialTheme.typography.bodyMedium,

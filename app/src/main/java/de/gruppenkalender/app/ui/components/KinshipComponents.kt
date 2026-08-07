@@ -53,6 +53,7 @@ import de.gruppenkalender.app.model.CalendarGroup
 import de.gruppenkalender.app.ui.theme.KinshipBlue
 import de.gruppenkalender.app.ui.theme.KinshipBluePale
 import de.gruppenkalender.app.ui.theme.KinshipInk
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -270,11 +271,34 @@ fun CalendarEventCard(
                     text = event.title,
                     style = MaterialTheme.typography.titleMedium,
                 )
-                Text(
-                    text = "${event.startTime.format(TimeFormatter)} – ${event.endTime.format(TimeFormatter)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (event.startDate == event.endDate) {
+                    Text(
+                        text = "${event.startTime.format(TimeFormatter)} – ${event.endTime.format(TimeFormatter)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else if (event.startDate == LocalDate.now()) {
+                    Text(
+                        text = "${event.startTime.format(TimeFormatter)} – 23:59",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else if (event.endDate == LocalDate.now()) { //LocalDate durch angezeigten Tag ersetzen
+                    Text(
+                        text = "00:00 – ${event.endTime.format(TimeFormatter)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else {
+                    Text(
+                        text = "00:00 – 23:59",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (event.location.isNotBlank()) {
                     Text(
                         text = event.location,
