@@ -61,18 +61,20 @@ fun CalendarScreen(
     }
     var viewIndex by remember { mutableIntStateOf(1) }
     var weekOffset by remember { mutableIntStateOf(0) }
+    var selectedDayIndex by remember { mutableIntStateOf(LocalDate.now().dayOfWeek.value - 1) }
     val thisMonday =
         LocalDate
             .now()
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val rangeStart = thisMonday.plusWeeks(weekOffset.toLong())
     val rangeEnd = rangeStart.plusDays(6)
+    val selectedDate = rangeStart.plusDays(selectedDayIndex.toLong())
     val visibleEvents =
         events
             .filter { it.groupId in selectedGroupIds }
             .filter {
                 when (viewIndex) {
-                    0 -> it.startDate == LocalDate.now()
+                    0 -> it.startDate == selectedDate
                     2 ->
                         it.startDate.month == rangeStart.month &&
                             it.startDate.year == rangeStart.year
@@ -99,6 +101,14 @@ fun CalendarScreen(
                     onPrevious = { weekOffset-- },
                     onNext = { weekOffset++ },
                 )
+            }
+            if (viewIndex == 0) {
+                item {
+                    WeekdaySelector(
+                        selectedDayIndex = selectedDayIndex,
+                        onDaySelected = { selectedDayIndex = it },
+                    )
+                }
             }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -169,6 +179,52 @@ fun CalendarScreen(
 }
 
 //UI Filter
+@Composable
+private fun WeekdaySelector(
+    selectedDayIndex: Int,
+    onDaySelected: (Int) -> Unit,
+) {
+    val weekdays = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+    KinshipCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            weekdays.forEachIndexed { index, label ->
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    color =
+                        if (selectedDayIndex == index) {
+                            KinshipBlue
+                        } else {
+                            Color.Transparent
+                        },
+                    onClick = { onDaySelected(index) },
+                ) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        color =
+                            if (selectedDayIndex == index) {
+                                Color.White
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        fontWeight =
+                            if (selectedDayIndex == index) {
+                                FontWeight.Bold
+                            } else {
+                                FontWeight.Normal
+                            },
+                    )
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun CalendarRangeSelector(
     viewIndex: Int,
