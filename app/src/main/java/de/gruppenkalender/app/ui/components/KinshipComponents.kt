@@ -280,7 +280,7 @@ fun CalendarEventCard(
                 }
                 else if (event.startDate == LocalDate.now()) {
                     Text(
-                        text = "${event.startTime.format(TimeFormatter)} – 23:59",
+                        text = "${event.startTime.format(TimeFormatter)} – ${event.endDate.format(ShortDateFormatter)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -294,7 +294,7 @@ fun CalendarEventCard(
                 }
                 else {
                     Text(
-                        text = "00:00 – 23:59",
+                        text = "00:00 – ${event.endDate.format(ShortDateFormatter)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
