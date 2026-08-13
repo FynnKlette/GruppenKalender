@@ -11,17 +11,19 @@ Entwickeln einer Kalender-App für den Kurs App-Entwicklung mit Andoid an der HW
 - Gruppenanlegen
 - Dashboard
 - Kalenderfilterfunktion (Gruppen)
+- Kalenderansicht (Tag)
+
 
 🔶 In Entwicklung
-- Kalenderansicht (Tag)
 - Kalenderansicht (Monat)
+- Mehrtägige Events haben sichtbare Enddatum
 
 ❌ Zukünftige Entwicklungen
 - Gruppenmitglieder Gruppe hinzufügen
 - Gruppenmitglieder Termin hinzufügen
 - Termin in weitere Gruppe kopieren
 - Terminblocker aus Terminen erstellen
-- Mehrtägige Events haben sichtbare Enddatum
+
 
 
 ### Build-Versionen
