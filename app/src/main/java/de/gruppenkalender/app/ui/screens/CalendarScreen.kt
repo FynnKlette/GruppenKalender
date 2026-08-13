@@ -61,6 +61,7 @@ fun CalendarScreen(
     }
     var viewIndex by remember { mutableIntStateOf(1) }
     var weekOffset by remember { mutableIntStateOf(0) }
+    var monthOffset by remember { mutableIntStateOf(0) }
     var selectedDayIndex by remember { mutableIntStateOf(LocalDate.now().dayOfWeek.value - 1) }
     val thisMonday =
         LocalDate
@@ -69,6 +70,7 @@ fun CalendarScreen(
     val rangeStart = thisMonday.plusWeeks(weekOffset.toLong())
     val rangeEnd = rangeStart.plusDays(6)
     val selectedDate = rangeStart.plusDays(selectedDayIndex.toLong())
+    val selectedMonth = LocalDate.now().plusMonths(monthOffset.toLong())
     val visibleEvents =
         events
             .filter { it.groupId in selectedGroupIds }
@@ -76,8 +78,8 @@ fun CalendarScreen(
                 when (viewIndex) {
                     0 -> it.startDate == selectedDate
                     2 ->
-                        it.startDate.month == rangeStart.month &&
-                            it.startDate.year == rangeStart.year
+                        it.startDate.month == selectedMonth.month &&
+                            it.startDate.year == selectedMonth.year
                     else -> !it.startDate.isBefore(rangeStart) && !it.startDate.isAfter(rangeEnd)
                 }
             }.sortedWith(compareBy<CalendarEvent> { it.startDate }.thenBy { it.startTime })
@@ -96,10 +98,34 @@ fun CalendarScreen(
                 CalendarRangeSelector(
                     viewIndex = viewIndex,
                     onViewChange = { viewIndex = it },
-                    start = rangeStart,
-                    end = rangeEnd,
-                    onPrevious = { weekOffset-- },
-                    onNext = { weekOffset++ },
+                    start =
+                        if (viewIndex == 2){
+                            selectedMonth
+                        }
+                        else {
+                            rangeStart
+                        },
+                    end =
+                        if (viewIndex == 2){
+                            selectedMonth
+                        }
+                        else {
+                            rangeEnd
+                        },
+                    onPrevious =
+                        if (viewIndex == 2) {
+                            {monthOffset--}
+                        }
+                        else {
+                            {weekOffset--}
+                        },
+                    onNext =
+                        if (viewIndex == 2) {
+                            {monthOffset++}
+                        }
+                        else {
+                            {weekOffset++}
+                        },
                 )
             }
             if (viewIndex == 0) {
@@ -275,16 +301,28 @@ private fun CalendarRangeSelector(
                         tint = Color.White,
                     )
                 }
-                Text(
-                    "${start.format(DateTimeFormatter.ofPattern("dd.MM."))} – ${
-                        end.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                    }",
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                if (viewIndex == 2) {
+                    Text(
+                        "${start.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.GERMAN))}",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                else {
+                    Text(
+                        "${start.format(DateTimeFormatter.ofPattern("dd.MM."))} – ${
+                            end.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                        }",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
                 IconButton(onClick = onNext) {
                     Icon(
                         Icons.AutoMirrored.Outlined.KeyboardArrowRight,
