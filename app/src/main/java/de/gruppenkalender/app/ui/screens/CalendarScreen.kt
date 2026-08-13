@@ -74,16 +74,21 @@ fun CalendarScreen(
     val visibleEvents =
         events
             .filter { it.groupId in selectedGroupIds }
-            .filter {
+            .flatMap { event ->
+                generateSequence(event.startDate) { date ->
+                    date.plusDays(1).takeIf { it <= event.endDate }
+                }.map { date -> date to event }.toList()
+            }
+            .filter { (date, _) ->
                 when (viewIndex) {
-                    0 -> it.startDate == selectedDate
-                    2 ->
-                        it.startDate.month == selectedMonth.month &&
-                            it.startDate.year == selectedMonth.year
-                    else -> !it.startDate.isBefore(rangeStart) && !it.startDate.isAfter(rangeEnd)
+                    0 -> date == selectedDate
+                    1 -> !date.isBefore(rangeStart) && !date.isAfter(rangeEnd)
+                    2 -> date.month == rangeStart.month && date.year == rangeStart.year
+                    else -> false
                 }
-            }.sortedWith(compareBy<CalendarEvent> { it.startDate }.thenBy { it.startTime })
-            .groupBy { it.startDate }
+            }
+            .sortedWith(compareBy({ it.first }, { it.second.startTime }))
+            .groupBy({ it.first }, { it.second })
     Column {
         AppTopBar(
             title = "GruppenKalender",
@@ -190,10 +195,11 @@ fun CalendarScreen(
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
-                    items(dateEvents, key = { it.id }) { event ->
+                    items(dateEvents, key = { "$date-${it.id}" }) { event ->
                         CalendarEventCard(
                             event = event,
                             group = groups.find { it.id == event.groupId },
+                            displayDate = date,
                             onClick = { onOpenEvent(event.id) },
                         )
                     }

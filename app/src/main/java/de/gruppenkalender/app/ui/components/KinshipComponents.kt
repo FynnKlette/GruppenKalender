@@ -245,6 +245,7 @@ fun CalendarEventCard(
     event: CalendarEvent,
     group: CalendarGroup?,
     modifier: Modifier = Modifier,
+    displayDate: LocalDate = event.startDate,
     onClick: () -> Unit,
 ) {
     val accent = Color(group?.accent ?: 0xFF737782.toInt())
@@ -277,24 +278,21 @@ fun CalendarEventCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                else if (event.startDate == LocalDate.now()) {
+                } else if (displayDate == event.startDate) {
                     Text(
                         text = "${event.startTime.format(TimeFormatter)} – ${event.endDate.format(ShortDateFormatter)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                else if (event.endDate == LocalDate.now()) { //LocalDate durch angezeigten Tag ersetzen
+                } else if (displayDate == event.endDate) {
                     Text(
-                        text = "00:00 – ${event.endTime.format(TimeFormatter)}",
+                        text = "${event.startDate.format(ShortDateFormatter)} – ${event.endTime.format(TimeFormatter)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                else {
+                } else {
                     Text(
-                        text = "00:00 – ${event.endDate.format(ShortDateFormatter)}",
+                        text = "${event.startDate.format(ShortDateFormatter)} – ${event.endDate.format(ShortDateFormatter)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
