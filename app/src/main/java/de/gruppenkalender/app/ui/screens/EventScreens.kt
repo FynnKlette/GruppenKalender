@@ -111,10 +111,28 @@ fun EventEditorScreen(
         mutableStateOf((event?.category ?: EventCategory.FAMILY).name)
     }
     var selectedPeople by rememberSaveable(event?.id) {
-        mutableStateOf(event?.participants?.toSet() ?: setOf("Anja"))
+        mutableStateOf(
+            event
+                ?.participants
+                ?.toSet()
+                .orEmpty(),
+        )
     }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val accent = Color(groups.find { it.id == selectedGroupId }?.accent ?: 0xFF4A76C0.toInt())
+    val availablePeople =
+        (
+            groups
+                .find {
+                    it.id == selectedGroupId
+                }
+                ?.memberNames
+                ?.values
+                .orEmpty() +
+                selectedPeople
+            )
+            .distinct()
+            .sorted()
 
     Column {
         AppTopBar(
@@ -195,7 +213,13 @@ fun EventEditorScreen(
                                 Checkbox(
                                     checked = selectedGroupId == group.id,
                                     onCheckedChange = {
-                                        if (it) selectedGroupId = group.id
+                                        if (
+                                            it &&
+                                            selectedGroupId != group.id
+                                        ) {
+                                            selectedGroupId = group.id
+                                            selectedPeople = emptySet()
+                                        }
                                     },
                                 )
                                 Text(group.name)
@@ -297,15 +321,37 @@ fun EventEditorScreen(
                 }
             }
             item {
-                FieldLabel("BETEILIGTE PERSONEN")
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf("Anja", "Ben", "Julia", "Lukas", "Markus")) { person ->
+                FieldLabel("GRUPPENMITGLIEDER")
+
+                LazyRow(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                ) {
+                    if (availablePeople.isEmpty()) {
+                        item {
+                            Text(
+                                "Keine Mitglieder verfügbar",
+                                color =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    items(
+                        items = availablePeople,
+                        key = { it },
+                    ) { person ->
                         PersonChip(
                             name = person,
-                            selected = person in selectedPeople,
+                            selected =
+                                person in selectedPeople,
                             onClick = {
                                 selectedPeople =
-                                    if (person in selectedPeople) {
+                                    if (
+                                        person in selectedPeople
+                                    ) {
                                         selectedPeople - person
                                     } else {
                                         selectedPeople + person

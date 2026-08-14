@@ -29,6 +29,8 @@ class AppViewModel(
     private val repository = FirebaseCalendarRepository()
     private val listeners = mutableListOf<ListenerRegistration>()
     private val eventListeners = mutableListOf<ListenerRegistration>()
+    private var lastMemberNameSync:
+        Pair<Set<String>, String>? = null
     var isCheckingAuth by mutableStateOf(true)
         private set
 
@@ -115,6 +117,7 @@ class AppViewModel(
         isAuthenticated = false
         authError = null
         dataError = null
+        lastMemberNameSync = null
     }
 
     fun updateProfile(name: String) {
@@ -124,6 +127,7 @@ class AppViewModel(
                 email = repository.signedInEmail,
             )
         repository.saveProfile(profile)
+        syncMemberName()
     }
 
     fun updateNotifications(settings: NotificationSettings) {
@@ -153,6 +157,7 @@ class AppViewModel(
                 accent = colors[groups.size % colors.size].toInt(),
                 isPrivate = isPrivate,
                 memberIds = listOf(repository.signedInUserId),
+                memberNames = mapOf(repository.signedInUserId to profile.name,),
                 inviteCode = createInviteCode(),
             )
 
@@ -164,7 +169,10 @@ class AppViewModel(
         inviteCode: String,
         onComplete: (String?) -> Unit,
     ) {
-        repository.joinGroup(inviteCode) { result ->
+        repository.joinGroup(
+            inviteCode = inviteCode,
+            memberName = profile.name,
+        ) { result ->
             onComplete(
                 result
                     .exceptionOrNull()
@@ -259,6 +267,7 @@ class AppViewModel(
             repository.observeUserData(
                 onProfileChanged = {
                     profile = it
+                    syncMemberName()
                 },
                 onNotificationsChanged = {
                     notificationSettings = it
@@ -275,6 +284,8 @@ class AppViewModel(
 
                     groups.clear()
                     groups.addAll(sortedGroups)
+
+                    syncMemberName()
 
                     if (groupIdsChanged) {
                         startEventSync()
@@ -308,6 +319,40 @@ class AppViewModel(
                     dataError = it.toGermanMessage()
                 },
             )
+    }
+
+    // Speichert den aktuellen Profilnamen in allen Gruppen.
+    private fun syncMemberName() {
+        val groupIds =
+            groups.map { it.id }.toSet()
+
+        val memberName =
+            profile.name.trim()
+
+        if (
+            groupIds.isEmpty() ||
+            memberName.isBlank()
+        ) {
+            return
+        }
+
+        val syncKey =
+            groupIds to memberName
+
+        if (syncKey == lastMemberNameSync) {
+            return
+        }
+
+        lastMemberNameSync = syncKey
+
+        repository.updateMemberName(
+            groupIds = groupIds.toList(),
+            memberName = memberName,
+            onError = {
+                lastMemberNameSync = null
+                dataError = it.toGermanMessage()
+            },
+        )
     }
 
     private fun stopDataSync() {

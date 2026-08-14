@@ -11,6 +11,7 @@ data class CalendarGroup(
     val accent: Int,
     val isPrivate: Boolean = false,
     val memberIds: List<String> = emptyList(),
+    val memberNames: Map<String, String> = emptyMap(),
     val inviteCode: String = "",
 )
 

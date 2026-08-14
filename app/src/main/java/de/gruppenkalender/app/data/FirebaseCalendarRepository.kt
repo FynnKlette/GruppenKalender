@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.FieldPath
 import de.gruppenkalender.app.model.CalendarEvent
 import de.gruppenkalender.app.model.CalendarGroup
 import de.gruppenkalender.app.model.EventCategory
@@ -359,18 +360,30 @@ class FirebaseCalendarRepository {
 
     fun joinGroup(
         inviteCode: String,
+        memberName: String,
         onComplete: (Result<Unit>) -> Unit,
     ) {
         val userId = requireUserId()
         val normalizedCode = inviteCode.trim().uppercase()
 
+        val normalizedMemberName =
+            memberName
+                .trim()
+                .ifBlank {
+                    signedInEmail.substringBefore("@")
+                }
+
         firestore
             .collection(COLLECTION_GROUPS)
-            .whereEqualTo("inviteCode", normalizedCode)
+            .whereEqualTo(
+                "inviteCode",
+                normalizedCode,
+            )
             .limit(1)
             .get()
             .addOnSuccessListener { result ->
-                val groupDocument = result.documents.firstOrNull()
+                val groupDocument =
+                    result.documents.firstOrNull()
 
                 if (groupDocument == null) {
                     onComplete(
@@ -386,21 +399,42 @@ class FirebaseCalendarRepository {
                 firestore
                     .runTransaction { transaction ->
                         val currentGroup =
-                            transaction.get(groupDocument.reference)
+                            transaction.get(
+                                groupDocument.reference,
+                            )
 
                         val memberIds =
                             (currentGroup.get("memberIds") as? List<*>)
                                 ?.filterIsInstance<String>()
                                 .orEmpty()
 
+                        val memberNames =
+                            (currentGroup.get("memberNames") as? Map<*, *>)
+                                ?.mapNotNull { (key, value) ->
+                                    if (
+                                        key is String &&
+                                        value is String
+                                    ) {
+                                        key to value
+                                    } else {
+                                        null
+                                    }
+                                }
+                                ?.toMap()
+                                .orEmpty()
+
                         if (userId !in memberIds) {
-                            val updatedMemberIds = memberIds + userId
+                            val updatedMemberIds =
+                                memberIds + userId
 
                             transaction.update(
                                 groupDocument.reference,
                                 mapOf(
                                     "memberIds" to updatedMemberIds,
                                     "memberCount" to updatedMemberIds.size,
+                                    "memberNames" to
+                                        memberNames +
+                                        (userId to normalizedMemberName),
                                 ),
                             )
                         }
@@ -414,6 +448,40 @@ class FirebaseCalendarRepository {
             }
             .addOnFailureListener {
                 onComplete(Result.failure(it))
+            }
+    }
+
+    // Synchronisiert den Profilnamen in allen Gruppen.
+    fun updateMemberName(
+        groupIds: List<String>,
+        memberName: String,
+        onError: (Throwable) -> Unit,
+    ) {
+        if (
+            groupIds.isEmpty() ||
+            memberName.isBlank()
+        ) {
+            return
+        }
+
+        val userId = requireUserId()
+        val batch = firestore.batch()
+
+        groupIds.distinct().forEach { groupId ->
+            batch.update(
+                groupDocument(groupId),
+                FieldPath.of(
+                    "memberNames",
+                    userId,
+                ),
+                memberName.trim(),
+            )
+        }
+
+        batch
+            .commit()
+            .addOnFailureListener {
+                onError(it)
             }
     }
 
@@ -465,8 +533,8 @@ class FirebaseCalendarRepository {
                     }",
                 email = user.email.orEmpty(),
             )
-        val groups = defaultGroups(user.uid)
-        val events = defaultEvents(groups)
+        val groups = defaultGroups(user.uid, profile.name,)
+        val events = defaultEvents(groups, profile.name)
         val userRef = userDocument(user.uid)
         val batch = firestore.batch()
 
@@ -530,6 +598,7 @@ class FirebaseCalendarRepository {
             "accent" to accent.toLong(),
             "private" to isPrivate,
             "memberIds" to memberIds,
+            "memberNames" to memberNames,
             "inviteCode" to inviteCode,
         )
 
@@ -583,6 +652,19 @@ class FirebaseCalendarRepository {
                     (get("memberIds") as? List<*>)
                         ?.filterIsInstance<String>()
                         .orEmpty(),
+                memberNames =
+                    (get ("memberNames") as? Map<*,*>)
+                        ?.mapNotNull { (key, value) ->
+                            if (
+                                key is String && value is String
+                            ) {
+                                key to value
+                            } else {
+                                null
+                            }
+                        }
+                        ?.toMap()
+                        .orEmpty(),
                 inviteCode =
                     getString("inviteCode").orEmpty(),
             )
@@ -608,36 +690,20 @@ class FirebaseCalendarRepository {
             )
         }.getOrNull()
 
-    private fun defaultGroups(userId: String) =
+    private fun defaultGroups(userId: String, memberName: String) =
         listOf(
             CalendarGroup(
-                id = "$userId-family",
-                name = "Familie",
+                id = "$userId-private",
+                name = "Privat",
                 type = "Privat",
                 memberCount = 1,
                 accent = 0xFF4A76C0.toInt(),
                 isPrivate = true,
                 memberIds = listOf(userId),
+                memberNames = mapOf(userId to memberName),
                 inviteCode = createInviteCode(),
             ),
-            CalendarGroup(
-                id = "$userId-sport",
-                name = "Sportverein",
-                type = "Sport",
-                memberCount = 1,
-                accent = 0xFFF2994A.toInt(),
-                memberIds = listOf(userId),
-                inviteCode = createInviteCode(),
-            ),
-            CalendarGroup(
-                id = "$userId-friends",
-                name = "Freundeskreis",
-                type = "Freunde",
-                memberCount = 1,
-                accent = 0xFF27AE60.toInt(),
-                memberIds = listOf(userId),
-                inviteCode = createInviteCode(),
-            ),
+
         )
 
     private fun createInviteCode(): String =
@@ -648,7 +714,7 @@ class FirebaseCalendarRepository {
             .take(6)
             .uppercase()
 
-    private fun defaultEvents(groups: List<CalendarGroup>): List<CalendarEvent> {
+    private fun defaultEvents(groups: List<CalendarGroup>, memberName: String): List<CalendarEvent> {
         val monday = LocalDate.now().with(DayOfWeek.MONDAY)
         return listOf(
             CalendarEvent(
@@ -661,8 +727,8 @@ class FirebaseCalendarRepository {
                 endTime = LocalTime.of(19, 0),
                 location = "Berlin",
                 description = "Dieser Beispieltermin ist wichtig!",
-                participants = listOf("Ich"),
-                category = EventCategory.FAMILY,
+                participants = listOf(memberName),
+                category = EventCategory.OTHER,
             ),
         )
     }
