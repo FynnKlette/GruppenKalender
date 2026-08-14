@@ -148,7 +148,9 @@ fun SettingsScreen(
                     }
                 }
             }
+            /*
             item { SettingsLabel("BENACHRICHTIGUNGEN") }
+
             item {
                 KinshipCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
@@ -187,6 +189,8 @@ fun SettingsScreen(
                     }
                 }
             }
+            */
+            /*
             item { SettingsLabel("PRIVATSPHÄRE") }
             item {
                 KinshipCard(modifier = Modifier.fillMaxWidth()) {
@@ -205,6 +209,8 @@ fun SettingsScreen(
                     }
                 }
             }
+            */
+
             item { SettingsLabel("KONTO-VERWALTUNG") }
             item {
                 KinshipCard(modifier = Modifier.fillMaxWidth()) {
@@ -215,10 +221,13 @@ fun SettingsScreen(
                             onClick = { showPasswordDialog = true },
                         )
                         DividerLine()
+                        /*
                         SettingsLinkRow(
                             icon = Icons.Outlined.CreditCard,
                             title = "Abonnement verwalten",
                         )
+                         */
+
                     }
                 }
             }

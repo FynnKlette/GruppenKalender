@@ -525,7 +525,7 @@ class FirebaseCalendarRepository {
         val profile =
             UserProfile(
                 name =
-                    "Familie ${
+                    " ${
                         user.email
                             .orEmpty()
                             .substringBefore("@")

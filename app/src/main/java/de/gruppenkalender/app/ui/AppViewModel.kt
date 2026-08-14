@@ -241,6 +241,25 @@ class AppViewModel(
         )
     }
 
+    fun copyEvent(
+        eventId: String,
+        targetGroupId: String,
+    ): CalendarEvent? {
+        val source = events.find { it.id == eventId } ?: return null
+        if (source.groupId == targetGroupId) return null
+
+        val copied =
+            source.copy(
+                id = UUID.randomUUID().toString(),
+                groupId = targetGroupId,
+                participants = emptyList(),
+            )
+
+        events += copied
+        repository.saveEvent(copied)
+        return copied
+    }
+
     fun sendPasswordReset(
         email: String,
         onComplete: (String?) -> Unit,

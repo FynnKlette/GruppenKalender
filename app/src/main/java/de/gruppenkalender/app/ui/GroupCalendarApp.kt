@@ -153,9 +153,17 @@ private fun GroupCalendarShell(
                         EventDetailsScreen(
                             event = event,
                             group = appViewModel.groups.find { it.id == event.groupId },
+                            groups = appViewModel.groups,
                             onBack = { onNavigate(AppDestination.Calendar) },
                             onEdit = {
                                 onNavigate(AppDestination.EventEditor(destination.eventId))
+                            },
+                            onCopy = { targetGroupId ->
+                                appViewModel
+                                    .copyEvent(destination.eventId, targetGroupId)
+                                    ?.let { copied ->
+                                        onNavigate(AppDestination.EventDetails(copied.id))
+                                    }
                             },
                             onDelete = {
                                 appViewModel.deleteEvent(destination.eventId)

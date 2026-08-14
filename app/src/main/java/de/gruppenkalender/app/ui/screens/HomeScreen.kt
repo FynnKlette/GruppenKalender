@@ -72,14 +72,14 @@ fun HomeScreen(
         LazyColumn(
             contentPadding = ScreenPadding,
             verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+        ) {/*
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(groups, key = { it.id }) { group ->
                         GroupChip(group = group, selected = group == groups.firstOrNull()) {}
                     }
                 }
-            }
+            }*/
             //Termine (verkürzt)
             item {
                 SectionTitle("Anstehende Termine", "Alle ansehen", onOpenCalendar)

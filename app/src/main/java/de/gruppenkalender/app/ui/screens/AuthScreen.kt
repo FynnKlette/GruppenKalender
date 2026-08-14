@@ -117,7 +117,7 @@ fun AuthScreen(
                     )
                     Text(
                         if (registerMode) {
-                            "Registriere dich für deinen Gruppenkalender."
+                            "Registriere dich für deinen Gruppenkalender. Du kannst in den Einstellungen deinen Username wählen."
                         } else {
                             "Melde dich an, um deine Termine zu koordinieren."
                         },

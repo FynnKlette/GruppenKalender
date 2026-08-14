@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -426,13 +427,17 @@ fun EventEditorScreen(
 fun EventDetailsScreen(
     event: CalendarEvent,
     group: CalendarGroup?,
+    groups: List<CalendarGroup>,
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onCopy: (String) -> Unit,
     onDelete: () -> Unit,
 ) {
     var attending by rememberSaveable(event.id) { mutableStateOf<Boolean?>(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val accent = Color(group?.accent ?: 0xFF4A76C0.toInt())
+    var showCopyDialog by remember { mutableStateOf(false) }
+    val otherGroups = groups.filter { it.id != event.groupId }
 
     Column {
         AppTopBar(
@@ -589,7 +594,18 @@ fun EventDetailsScreen(
                     }
                 }
             }
-            //Termin löschen
+            //Termin in andere Gruppe kopieren & löschen
+            item {
+                OutlinedButton(
+                    onClick = { showCopyDialog = true },
+                    enabled = otherGroups.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, null)
+                    Spacer(Modifier.size(8.dp))
+                    Text("In andere Gruppe kopieren")
+                }
+            }
             item {
                 OutlinedButton(
                     onClick = { showDeleteDialog = true },
@@ -605,7 +621,33 @@ fun EventDetailsScreen(
             item { Spacer(Modifier.height(76.dp)) }
         }
     }
-
+    if (showCopyDialog) {
+        AlertDialog(
+            onDismissRequest = { showCopyDialog = false },
+            title = { Text("Zielgruppe auswählen") },
+            text = {
+                Column {
+                    otherGroups.forEach { targetGroup ->
+                        TextButton(
+                            onClick = {
+                                showCopyDialog = false
+                                onCopy(targetGroup.id)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(targetGroup.name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showCopyDialog = false }) {
+                    Text("ABBRECHEN")
+                }
+            },
+        )
+    }
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
