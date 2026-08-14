@@ -2,7 +2,8 @@
 
 ## Projekt
 Entwickeln einer Kalender-App für den Kurs App-Entwicklung mit Andoid an der HWR Berlin.
-Entwickelt von Fynn Klette
+<br>
+Entwickelt von Fynn Klette.
 
 ## Funktionen
 
@@ -15,16 +16,18 @@ Entwickelt von Fynn Klette
 - Kalenderansicht (Tag)
 - Kalenderansicht (Monat)
 - Mehrtägige Events haben sichtbare Enddatum
+- Gruppenmitglieder Gruppe hinzufügen
+- Gruppenmitglieder Termin hinzufügen
+- Termin in weitere Gruppe kopieren
 
 🔶 In Entwicklung
 
 ❌ Zukünftige Entwicklungen
-- Gruppenmitglieder Gruppe hinzufügen
-- Gruppenmitglieder Termin hinzufügen
-- Termin in weitere Gruppe kopieren
-- Terminblocker aus Terminen erstellen
+- Verbesserungen an User Experience
 
+<br><br>
 
+aktuelle version 1.0.0
 
 ### Build-Versionen
 
@@ -35,3 +38,6 @@ Entwickelt von Fynn Klette
 - Firebase Android BOM 34.16.0
 - Google Services Gradle Plugin 4.5.0
 - minSdk 26, targetSdk/compileSdk 36
+
+
+In Docs befinden sich Ablaufdiagramm, Aufzeichnung. Die APK befindet sich in dem gleichnamigen Ordner
