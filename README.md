@@ -2,6 +2,7 @@
 
 ## Projekt
 Entwickeln einer Kalender-App für den Kurs App-Entwicklung mit Andoid an der HWR Berlin.
+Entwickelt von Fynn Klette
 
 ## Funktionen
 
@@ -12,11 +13,10 @@ Entwickeln einer Kalender-App für den Kurs App-Entwicklung mit Andoid an der HW
 - Dashboard
 - Kalenderfilterfunktion (Gruppen)
 - Kalenderansicht (Tag)
-
-
-🔶 In Entwicklung
 - Kalenderansicht (Monat)
 - Mehrtägige Events haben sichtbare Enddatum
+
+🔶 In Entwicklung
 
 ❌ Zukünftige Entwicklungen
 - Gruppenmitglieder Gruppe hinzufügen
