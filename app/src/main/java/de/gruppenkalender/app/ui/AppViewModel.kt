@@ -28,7 +28,7 @@ class AppViewModel(
 ) : AndroidViewModel(application) {
     private val repository = FirebaseCalendarRepository()
     private val listeners = mutableListOf<ListenerRegistration>()
-
+    private val eventListeners = mutableListOf<ListenerRegistration>()
     var isCheckingAuth by mutableStateOf(true)
         private set
 
@@ -136,7 +136,14 @@ class AppViewModel(
         type: String,
         isPrivate: Boolean,
     ) {
-        val colors = listOf(0xFF4A76C0, 0xFFF2994A, 0xFF27AE60, 0xFF8E5BB7)
+        val colors =
+            listOf(
+                0xFF4A76C0,
+                0xFFF2994A,
+                0xFF27AE60,
+                0xFF8E5BB7,
+            )
+
         val group =
             CalendarGroup(
                 id = UUID.randomUUID().toString(),
@@ -145,9 +152,25 @@ class AppViewModel(
                 memberCount = 1,
                 accent = colors[groups.size % colors.size].toInt(),
                 isPrivate = isPrivate,
+                memberIds = listOf(repository.signedInUserId),
+                inviteCode = createInviteCode(),
             )
+
         groups += group
         repository.saveGroup(group)
+    }
+
+    fun joinGroup(
+        inviteCode: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        repository.joinGroup(inviteCode) { result ->
+            onComplete(
+                result
+                    .exceptionOrNull()
+                    ?.toGermanMessage(),
+            )
+        }
     }
 
     fun saveEvent(
@@ -163,6 +186,10 @@ class AppViewModel(
         participants: List<String>,
         category: EventCategory,
     ): CalendarEvent {
+        val previousGroupId =
+            existingId?.let { eventId ->
+                events.find { it.id == eventId }?.groupId
+            }
         val event =
             CalendarEvent(
                 id = existingId ?: UUID.randomUUID().toString(),
@@ -179,13 +206,31 @@ class AppViewModel(
             )
         val index = events.indexOfFirst { it.id == event.id }
         if (index >= 0) events[index] = event else events += event
+        if (
+            previousGroupId != null &&
+            previousGroupId != event.groupId
+        ) {
+            repository.deleteEvent(
+                previousGroupId,
+                event.id,
+            )
+        }
         repository.saveEvent(event)
         return event
     }
 
     fun deleteEvent(eventId: String) {
+        val groupId =
+            events.find { it.id == eventId }
+                ?.groupId
+                ?: return
+
         events.removeAll { it.id == eventId }
-        repository.deleteEvent(eventId)
+
+        repository.deleteEvent(
+            groupId = groupId,
+            eventId = eventId,
+        )
     }
 
     fun sendPasswordReset(
@@ -199,29 +244,81 @@ class AppViewModel(
 
     private fun startDataSync() {
         stopDataSync()
+
         isAuthenticated = true
         isCheckingAuth = false
         dataError = null
-        profile = profile.copy(email = repository.signedInEmail)
+        profile =
+            profile.copy(
+                email = repository.signedInEmail,
+            )
+
+        events.clear()
 
         listeners +=
             repository.observeUserData(
-                onProfileChanged = { profile = it },
-                onNotificationsChanged = { notificationSettings = it },
-                onGroupsChanged = {
+                onProfileChanged = {
+                    profile = it
+                },
+                onNotificationsChanged = {
+                    notificationSettings = it
+                },
+                onGroupsChanged = { updatedGroups ->
+                    val sortedGroups =
+                        updatedGroups.sortedBy(
+                            CalendarGroup::name,
+                        )
+
+                    val groupIdsChanged =
+                        groups.map { it.id }.toSet() !=
+                            sortedGroups.map { it.id }.toSet()
+
                     groups.clear()
-                    groups.addAll(it.sortedBy(CalendarGroup::name))
+                    groups.addAll(sortedGroups)
+
+                    if (groupIdsChanged) {
+                        startEventSync()
+                    }
                 },
-                onEventsChanged = {
+                onError = {
+                    dataError = it.toGermanMessage()
+                },
+            )
+    }
+    // Startet für jede Gruppe einen gemeinsamen Termin-Listener.
+    private fun startEventSync() {
+        eventListeners.forEach(
+            ListenerRegistration::remove,
+        )
+        eventListeners.clear()
+        events.clear()
+
+        eventListeners +=
+            repository.observeGroupEvents(
+                groupIds = groups.map { it.id },
+                onEventsChanged = { updatedEvents ->
                     events.clear()
-                    events.addAll(it.sortedBy(CalendarEvent::startDate))
+                    events.addAll(
+                        updatedEvents.sortedBy(
+                            CalendarEvent::startDate,
+                        ),
+                    )
                 },
-                onError = { dataError = it.toGermanMessage() },
+                onError = {
+                    dataError = it.toGermanMessage()
+                },
             )
     }
 
     private fun stopDataSync() {
-        listeners.forEach(ListenerRegistration::remove)
+        eventListeners.forEach(
+            ListenerRegistration::remove,
+        )
+        eventListeners.clear()
+
+        listeners.forEach(
+            ListenerRegistration::remove,
+        )
         listeners.clear()
     }
 
@@ -229,6 +326,14 @@ class AppViewModel(
         stopDataSync()
         super.onCleared()
     }
+
+    private fun createInviteCode(): String =
+        UUID
+            .randomUUID()
+            .toString()
+            .replace("-", "")
+            .take(6)
+            .uppercase()
 
     private fun Throwable.toGermanMessage(): String =
         when (this) {

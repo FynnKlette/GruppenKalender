@@ -10,6 +10,8 @@ data class CalendarGroup(
     val memberCount: Int,
     val accent: Int,
     val isPrivate: Boolean = false,
+    val memberIds: List<String> = emptyList(),
+    val inviteCode: String = "",
 )
 
 data class CalendarEvent(

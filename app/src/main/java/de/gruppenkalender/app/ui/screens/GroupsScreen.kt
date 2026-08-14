@@ -53,7 +53,15 @@ import java.util.Locale
 fun GroupsScreen(
     groups: List<CalendarGroup>,
     events: List<CalendarEvent>,
-    onAddGroup: (name: String, type: String, private: Boolean) -> Unit,
+    onAddGroup: (
+        name: String,
+        type: String,
+        private: Boolean
+    ) -> Unit,
+    onJoinGroup: (
+        code: String,
+        onComplete: (String?) -> Unit,
+    ) -> Unit,
     onOpenCalendar: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -149,7 +157,12 @@ fun GroupsScreen(
         )
     }
     if (showJoinDialog) {
-        JoinGroupDialog(onDismiss = { showJoinDialog = false })
+        JoinGroupDialog(
+            onDismiss = {
+                showJoinDialog = false
+            },
+            onJoin = onJoinGroup,
+        )
     }
 }
 
@@ -207,7 +220,13 @@ private fun GroupManagementCard(
                             modifier = Modifier.size(18.dp),
                         )
                     }
-                    Text("${group.memberCount} Mitglieder")
+                    Text(
+                        if (group.inviteCode.isBlank()) {
+                            "${group.memberCount} Mitglieder"
+                        } else {
+                            "${group.memberCount} Mitglieder · Code: ${group.inviteCode}"
+                        },
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -282,6 +301,7 @@ private fun CreateGroupDialog(
                     label = { Text("Kategorie, z. B. Sport") },
                     singleLine = true,
                 )
+                /*
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -290,6 +310,8 @@ private fun CreateGroupDialog(
                     Text("Private Gruppe")
                     Switch(checked = private, onCheckedChange = { private = it })
                 }
+                */
+
             }
         },
         confirmButton = {
@@ -302,27 +324,90 @@ private fun CreateGroupDialog(
     )
 }
 
+// Prüft den Einladungscode in Firestore.
 @Composable
-private fun JoinGroupDialog(onDismiss: () -> Unit) {
+private fun JoinGroupDialog(
+    onDismiss: () -> Unit,
+    onJoin: (
+        code: String,
+        onComplete: (String?) -> Unit,
+    ) -> Unit,
+) {
     var code by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Gruppe beitreten") },
+        title = {
+            Text("Gruppe beitreten")
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Gib den Einladungscode deiner Gruppe ein.")
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Gib den Einladungscode deiner Gruppe ein.",
+                )
+
                 OutlinedTextField(
                     value = code,
-                    onValueChange = { code = it.uppercase() },
-                    label = { Text("Einladungscode") },
+                    onValueChange = {
+                        code = it.uppercase()
+                        error = null
+                    },
+                    label = {
+                        Text("Einladungscode")
+                    },
                     singleLine = true,
                 )
 
+                if (error != null) {
+                    Text(
+                        text = error.orEmpty(),
+                        color =
+                            MaterialTheme.colorScheme.error,
+                        style =
+                            MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss, enabled = code.length >= 4) { Text("BEITRETEN") }
+            Button(
+                onClick = {
+                    isLoading = true
+
+                    onJoin(code) { joinError ->
+                        isLoading = false
+
+                        if (joinError == null) {
+                            onDismiss()
+                        } else {
+                            error = joinError
+                        }
+                    }
+                },
+                enabled =
+                    code.length >= 4 &&
+                        !isLoading,
+            ) {
+                Text(
+                    if (isLoading) {
+                        "WIRD GEPRÜFT…"
+                    } else {
+                        "BEITRETEN"
+                    },
+                )
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("ABBRECHEN") } },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+            ) {
+                Text("ABBRECHEN")
+            }
+        },
     )
 }

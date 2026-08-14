@@ -117,6 +117,7 @@ private fun GroupCalendarShell(
                         groups = appViewModel.groups,
                         events = appViewModel.events,
                         onAddGroup = appViewModel::addGroup,
+                        onJoinGroup = appViewModel::joinGroup,
                         onOpenCalendar = { onNavigate(AppDestination.Calendar) },
                         onOpenSettings = { onNavigate(AppDestination.Settings) },
                     )

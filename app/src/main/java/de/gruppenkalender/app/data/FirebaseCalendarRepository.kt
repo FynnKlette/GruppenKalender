@@ -12,6 +12,7 @@ import de.gruppenkalender.app.model.UserProfile
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.UUID
 
 class FirebaseCalendarRepository {
     private val auth = FirebaseAuth.getInstance()
@@ -19,6 +20,9 @@ class FirebaseCalendarRepository {
 
     val hasSignedInUser: Boolean
         get() = auth.currentUser != null
+
+    val signedInUserId: String
+        get() = auth.currentUser?.uid.orEmpty()
 
     val signedInEmail: String
         get() = auth.currentUser?.email.orEmpty()
@@ -47,8 +51,13 @@ class FirebaseCalendarRepository {
 
     fun ensureUserData(onComplete: (Result<Unit>) -> Unit) {
         val user = auth.currentUser
+
         if (user == null) {
-            onComplete(Result.failure(IllegalStateException("Kein Benutzer angemeldet.")))
+            onComplete(
+                Result.failure(
+                    IllegalStateException("Kein Benutzer angemeldet."),
+                ),
+            )
             return
         }
 
@@ -56,18 +65,195 @@ class FirebaseCalendarRepository {
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
-                    onComplete(Result.success(Unit))
+                    ensureSharedGroups(user.uid, onComplete)
                 } else {
                     seedUserData(onComplete)
                 }
-            }.addOnFailureListener { onComplete(Result.failure(it)) }
+            }
+            .addOnFailureListener {
+                onComplete(Result.failure(it))
+            }
+    }
+
+    private fun ensureSharedGroups(
+        userId: String,
+        onComplete: (Result<Unit>) -> Unit,
+    ) {
+        firestore
+            .collection(COLLECTION_GROUPS)
+            .whereArrayContains("memberIds", userId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener sharedGroupsSuccess@{ sharedGroups ->
+                if (!sharedGroups.isEmpty) {
+                    migrateUserEvents(userId, onComplete)
+                    return@sharedGroupsSuccess
+                }
+
+                val userRef = userDocument(userId)
+
+                userRef
+                    .collection(COLLECTION_GROUPS)
+                    .get()
+                    .addOnSuccessListener legacyGroupsSuccess@{ legacyGroups ->
+                        if (legacyGroups.isEmpty) {
+                            migrateUserEvents(userId, onComplete)
+                            return@legacyGroupsSuccess
+                        }
+
+                        userRef
+                            .collection(COLLECTION_EVENTS)
+                            .get()
+                            .addOnSuccessListener { legacyEvents ->
+                                val groupIds = mutableMapOf<String, String>()
+                                val batch = firestore.batch()
+
+                                legacyGroups.documents.forEach { document ->
+                                    val oldGroup =
+                                        document.toGroup()
+                                            ?: return@forEach
+
+                                    val newGroupId = "$userId-${oldGroup.id}"
+
+                                    val sharedGroup =
+                                        oldGroup.copy(
+                                            id = newGroupId,
+                                            memberCount = 1,
+                                            memberIds = listOf(userId),
+                                            inviteCode = createInviteCode(),
+                                        )
+
+                                    groupIds[oldGroup.id] = newGroupId
+
+                                    batch.set(
+                                        firestore
+                                            .collection(COLLECTION_GROUPS)
+                                            .document(newGroupId),
+                                        sharedGroup.toFirestoreMap(),
+                                    )
+                                }
+
+                                legacyEvents.documents.forEach { document ->
+                                    val oldEvent =
+                                        document.toEvent()
+                                            ?: return@forEach
+
+                                    val newGroupId =
+                                        groupIds[oldEvent.groupId]
+                                            ?: return@forEach
+
+                                    batch.update(
+                                        document.reference,
+                                        "groupId",
+                                        newGroupId,
+                                    )
+                                }
+
+                                batch
+                                    .commit()
+                                    .addOnSuccessListener {
+                                        migrateUserEvents(userId, onComplete)
+                                    }
+                                    .addOnFailureListener {
+                                        onComplete(Result.failure(it))
+                                    }
+                            }
+                            .addOnFailureListener {
+                                onComplete(Result.failure(it))
+                            }
+                    }
+                    .addOnFailureListener {
+                        onComplete(Result.failure(it))
+                    }
+            }
+            .addOnFailureListener {
+                onComplete(Result.failure(it))
+            }
+    }
+
+    // Verschiebt alte Benutzertermine in die jeweilige Gruppe.
+    private fun migrateUserEvents(
+        userId: String,
+        onComplete: (Result<Unit>) -> Unit,
+    ) {
+        userDocument(userId)
+            .collection(COLLECTION_EVENTS)
+            .get()
+            .addOnSuccessListener { legacyEvents ->
+                if (legacyEvents.isEmpty) {
+                    onComplete(Result.success(Unit))
+                    return@addOnSuccessListener
+                }
+
+                migrateEventChunks(
+                    documents = legacyEvents.documents.chunked(20),
+                    chunkIndex = 0,
+                    userId = userId,
+                    onComplete = onComplete,
+                )
+            }
+            .addOnFailureListener {
+                onComplete(Result.failure(it))
+            }
+    }
+
+    // Migriert höchstens 20 Termine pro Firestore-Batch.
+    private fun migrateEventChunks(
+        documents: List<List<DocumentSnapshot>>,
+        chunkIndex: Int,
+        userId: String,
+        onComplete: (Result<Unit>) -> Unit,
+    ) {
+        if (chunkIndex >= documents.size) {
+            onComplete(Result.success(Unit))
+            return
+        }
+
+        val batch = firestore.batch()
+
+        documents[chunkIndex].forEach { document ->
+            val oldEvent =
+                document.toEvent()
+                    ?: return@forEach
+
+            val event =
+                if (oldEvent.id == "welcome-event") {
+                    oldEvent.copy(
+                        id = "$userId-${oldEvent.id}",
+                    )
+                } else {
+                    oldEvent
+                }
+
+            batch.set(
+                groupDocument(event.groupId)
+                    .collection(COLLECTION_EVENTS)
+                    .document(event.id),
+                event.toFirestoreMap(),
+            )
+
+            batch.delete(document.reference)
+        }
+
+        batch
+            .commit()
+            .addOnSuccessListener {
+                migrateEventChunks(
+                    documents = documents,
+                    chunkIndex = chunkIndex + 1,
+                    userId = userId,
+                    onComplete = onComplete,
+                )
+            }
+            .addOnFailureListener {
+                onComplete(Result.failure(it))
+            }
     }
 
     fun observeUserData(
         onProfileChanged: (UserProfile) -> Unit,
         onNotificationsChanged: (NotificationSettings) -> Unit,
         onGroupsChanged: (List<CalendarGroup>) -> Unit,
-        onEventsChanged: (List<CalendarEvent>) -> Unit,
         onError: (Throwable) -> Unit,
     ): List<ListenerRegistration> {
         val userId = requireUserId()
@@ -79,7 +265,10 @@ class FirebaseCalendarRepository {
                     onError(error)
                     return@addSnapshotListener
                 }
-                snapshot?.toProfile(signedInEmail)?.let(onProfileChanged)
+
+                snapshot
+                    ?.toProfile(signedInEmail)
+                    ?.let(onProfileChanged)
             },
             userRef
                 .collection(COLLECTION_SETTINGS)
@@ -89,31 +278,64 @@ class FirebaseCalendarRepository {
                         onError(error)
                         return@addSnapshotListener
                     }
-                    snapshot?.toNotificationSettings()?.let(onNotificationsChanged)
+
+                    snapshot
+                        ?.toNotificationSettings()
+                        ?.let(onNotificationsChanged)
                 },
-            userRef
+            firestore
                 .collection(COLLECTION_GROUPS)
+                .whereArrayContains("memberIds", userId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         onError(error)
                         return@addSnapshotListener
                     }
+
                     onGroupsChanged(
-                        snapshot?.documents.orEmpty().mapNotNull { it.toGroup() },
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+                            .mapNotNull { it.toGroup() },
                     )
                 },
-            userRef
+        )
+    }
+
+    // Beobachtet die Termine aller Gruppen des Benutzers.
+    fun observeGroupEvents(
+        groupIds: List<String>,
+        onEventsChanged: (List<CalendarEvent>) -> Unit,
+        onError: (Throwable) -> Unit,
+    ): List<ListenerRegistration> {
+        if (groupIds.isEmpty()) {
+            onEventsChanged(emptyList())
+            return emptyList()
+        }
+
+        val eventsByGroup =
+            mutableMapOf<String, List<CalendarEvent>>()
+
+        return groupIds.distinct().map { groupId ->
+            groupDocument(groupId)
                 .collection(COLLECTION_EVENTS)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         onError(error)
                         return@addSnapshotListener
                     }
+
+                    eventsByGroup[groupId] =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+                            .mapNotNull { it.toEvent() }
+
                     onEventsChanged(
-                        snapshot?.documents.orEmpty().mapNotNull { it.toEvent() },
+                        eventsByGroup.values.flatten(),
                     )
-                },
-        )
+                }
+        }
     }
 
     fun saveProfile(profile: UserProfile) {
@@ -129,26 +351,88 @@ class FirebaseCalendarRepository {
     }
 
     fun saveGroup(group: CalendarGroup) {
-        userDocument(requireUserId())
+        firestore
             .collection(COLLECTION_GROUPS)
             .document(group.id)
             .set(group.toFirestoreMap())
     }
 
+    fun joinGroup(
+        inviteCode: String,
+        onComplete: (Result<Unit>) -> Unit,
+    ) {
+        val userId = requireUserId()
+        val normalizedCode = inviteCode.trim().uppercase()
+
+        firestore
+            .collection(COLLECTION_GROUPS)
+            .whereEqualTo("inviteCode", normalizedCode)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { result ->
+                val groupDocument = result.documents.firstOrNull()
+
+                if (groupDocument == null) {
+                    onComplete(
+                        Result.failure(
+                            IllegalArgumentException(
+                                "Einladungscode nicht gefunden.",
+                            ),
+                        ),
+                    )
+                    return@addOnSuccessListener
+                }
+
+                firestore
+                    .runTransaction { transaction ->
+                        val currentGroup =
+                            transaction.get(groupDocument.reference)
+
+                        val memberIds =
+                            (currentGroup.get("memberIds") as? List<*>)
+                                ?.filterIsInstance<String>()
+                                .orEmpty()
+
+                        if (userId !in memberIds) {
+                            val updatedMemberIds = memberIds + userId
+
+                            transaction.update(
+                                groupDocument.reference,
+                                mapOf(
+                                    "memberIds" to updatedMemberIds,
+                                    "memberCount" to updatedMemberIds.size,
+                                ),
+                            )
+                        }
+                    }
+                    .addOnSuccessListener {
+                        onComplete(Result.success(Unit))
+                    }
+                    .addOnFailureListener {
+                        onComplete(Result.failure(it))
+                    }
+            }
+            .addOnFailureListener {
+                onComplete(Result.failure(it))
+            }
+    }
+
     fun saveEvent(event: CalendarEvent) {
-        userDocument(requireUserId())
+        groupDocument(event.groupId)
             .collection(COLLECTION_EVENTS)
             .document(event.id)
             .set(event.toFirestoreMap())
     }
 
-    fun deleteEvent(eventId: String) {
-        userDocument(requireUserId())
+    fun deleteEvent(
+        groupId: String,
+        eventId: String,
+    ) {
+        groupDocument(groupId)
             .collection(COLLECTION_EVENTS)
             .document(eventId)
             .delete()
     }
-
     fun sendPasswordReset(
         email: String,
         onComplete: (Result<Unit>) -> Unit,
@@ -181,7 +465,7 @@ class FirebaseCalendarRepository {
                     }",
                 email = user.email.orEmpty(),
             )
-        val groups = defaultGroups()
+        val groups = defaultGroups(user.uid)
         val events = defaultEvents(groups)
         val userRef = userDocument(user.uid)
         val batch = firestore.batch()
@@ -193,13 +477,17 @@ class FirebaseCalendarRepository {
         )
         groups.forEach { group ->
             batch.set(
-                userRef.collection(COLLECTION_GROUPS).document(group.id),
+                firestore
+                    .collection(COLLECTION_GROUPS)
+                    .document(group.id),
                 group.toFirestoreMap(),
             )
         }
         events.forEach { event ->
             batch.set(
-                userRef.collection(COLLECTION_EVENTS).document(event.id),
+                groupDocument(event.groupId)
+                    .collection(COLLECTION_EVENTS)
+                    .document(event.id),
                 event.toFirestoreMap(),
             )
         }
@@ -212,6 +500,11 @@ class FirebaseCalendarRepository {
 
     private fun userDocument(userId: String) =
         firestore.collection(COLLECTION_USERS).document(userId)
+
+    private fun groupDocument(groupId: String) =
+        firestore
+            .collection(COLLECTION_GROUPS)
+            .document(groupId)
 
     private fun requireUserId(): String =
         requireNotNull(auth.currentUser?.uid) { "Kein Benutzer angemeldet." }
@@ -236,6 +529,8 @@ class FirebaseCalendarRepository {
             "memberCount" to memberCount,
             "accent" to accent.toLong(),
             "private" to isPrivate,
+            "memberIds" to memberIds,
+            "inviteCode" to inviteCode,
         )
 
     private fun CalendarEvent.toFirestoreMap() =
@@ -274,10 +569,22 @@ class FirebaseCalendarRepository {
             CalendarGroup(
                 id = id,
                 name = requireNotNull(getString("name")),
-                type = getString("type").orEmpty().ifBlank { "Gruppe" },
-                memberCount = (getLong("memberCount") ?: 1L).toInt(),
-                accent = (getLong("accent") ?: 0xFF4A76C0).toInt(),
-                isPrivate = getBoolean("private") ?: false,
+                type =
+                    getString("type")
+                        .orEmpty()
+                        .ifBlank { "Gruppe" },
+                memberCount =
+                    (getLong("memberCount") ?: 1L).toInt(),
+                accent =
+                    (getLong("accent") ?: 0xFF4A76C0).toInt(),
+                isPrivate =
+                    getBoolean("private") ?: false,
+                memberIds =
+                    (get("memberIds") as? List<*>)
+                        ?.filterIsInstance<String>()
+                        .orEmpty(),
+                inviteCode =
+                    getString("inviteCode").orEmpty(),
             )
         }.getOrNull()
 
@@ -301,18 +608,51 @@ class FirebaseCalendarRepository {
             )
         }.getOrNull()
 
-    private fun defaultGroups() =
+    private fun defaultGroups(userId: String) =
         listOf(
-            CalendarGroup("family", "Familie", "Privat", 1, 0xFF4A76C0.toInt(), true),
-            CalendarGroup("sport", "Sportverein", "Sport", 1, 0xFFF2994A.toInt()),
-            CalendarGroup("friends", "Freundeskreis", "Freunde", 1, 0xFF27AE60.toInt()),
+            CalendarGroup(
+                id = "$userId-family",
+                name = "Familie",
+                type = "Privat",
+                memberCount = 1,
+                accent = 0xFF4A76C0.toInt(),
+                isPrivate = true,
+                memberIds = listOf(userId),
+                inviteCode = createInviteCode(),
+            ),
+            CalendarGroup(
+                id = "$userId-sport",
+                name = "Sportverein",
+                type = "Sport",
+                memberCount = 1,
+                accent = 0xFFF2994A.toInt(),
+                memberIds = listOf(userId),
+                inviteCode = createInviteCode(),
+            ),
+            CalendarGroup(
+                id = "$userId-friends",
+                name = "Freundeskreis",
+                type = "Freunde",
+                memberCount = 1,
+                accent = 0xFF27AE60.toInt(),
+                memberIds = listOf(userId),
+                inviteCode = createInviteCode(),
+            ),
         )
+
+    private fun createInviteCode(): String =
+        UUID
+            .randomUUID()
+            .toString()
+            .replace("-", "")
+            .take(6)
+            .uppercase()
 
     private fun defaultEvents(groups: List<CalendarGroup>): List<CalendarEvent> {
         val monday = LocalDate.now().with(DayOfWeek.MONDAY)
         return listOf(
             CalendarEvent(
-                id = "welcome-event",
+                id = UUID.randomUUID().toString(),
                 title = "Erster gemeinsamer Termin",
                 groupId = groups.first().id,
                 startDate = monday.plusDays(2),
@@ -320,7 +660,7 @@ class FirebaseCalendarRepository {
                 startTime = LocalTime.of(18, 0),
                 endTime = LocalTime.of(19, 0),
                 location = "Berlin",
-                description = "Dieser Beispieltermin wird über Cloud Firestore synchronisiert.",
+                description = "Dieser Beispieltermin ist wichtig!",
                 participants = listOf("Ich"),
                 category = EventCategory.FAMILY,
             ),
