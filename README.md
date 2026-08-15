@@ -3,7 +3,7 @@
 ## Projekt
 Entwickeln einer Kalender-App für den Kurs App-Entwicklung mit Andoid an der HWR Berlin.
 <br>
-Entwickelt von Fynn Klette.
+Entwickelt von Fynn Klette (77205393600). 
 
 ## Funktionen
 
